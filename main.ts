@@ -13,7 +13,19 @@ const sourcePath = path.join(__dirname, "entry.txt");
 const outputDir = process.env.MAKEFUN_OUTPUT_DIR || "/output";
 const outputPath = path.join(outputDir, "entry.txt");
 
-const sentence = fs.readFileSync(sourcePath, "utf8");
+let sentence = fs.readFileSync(sourcePath, "utf8");
+
+// Defensive cleanup of the input: a leading UTF-8 BOM or one trailing
+// newline would make the file fail the single-line gate or change the
+// judged bytes, so strip at most one of each before validating.
+if (sentence.charCodeAt(0) === 0xfeff) {
+  sentence = sentence.slice(1);
+}
+if (sentence.endsWith("\r\n")) {
+  sentence = sentence.slice(0, -2);
+} else if (sentence.endsWith("\n")) {
+  sentence = sentence.slice(0, -1);
+}
 
 // Gate checks mirroring the competition gate: the entry must be UTF-8
 // text of 1 to 200 characters, not only white space, and a single
@@ -31,5 +43,12 @@ if (sentence.indexOf("\n") !== -1 || sentence.indexOf("\r") !== -1) {
 
 fs.mkdirSync(outputDir, { recursive: true });
 fs.writeFileSync(outputPath, sentence, "utf8");
+
+// Round-trip check: what the grader reads back must be exactly the
+// validated sentence, byte for byte.
+const written = fs.readFileSync(outputPath, "utf8");
+if (written !== sentence) {
+  throw new Error("round-trip mismatch: " + outputPath + " differs from entry.txt");
+}
 
 console.log("wrote " + outputPath + " (" + sentence.length + " chars)");
